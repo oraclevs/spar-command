@@ -35,9 +35,63 @@ pub struct CommandPlan {
     pub stderr: Option<Redirection>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PipelinePlan {
+    pub commands: Vec<CommandPlan>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Step {
+    Command(CommandPlan),
+    Pipeline(PipelinePlan),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn cmd(program: &str, args: &[&str]) -> CommandPlan {
+        CommandPlan {
+            program: program.into(),
+            args: args.iter().map(|s| s.to_string()).collect(),
+            env: vec![],
+            cwd: None,
+            stdin: None,
+            stdout: None,
+            stderr: None,
+        }
+    }
+
+    #[test]
+    fn pipeline_plan_holds_ordered_commands() {
+        let pipeline = PipelinePlan {
+            commands: vec![cmd("cat", &["file.log"]), cmd("grep", &["ERROR"]), cmd("sort", &[])],
+        };
+        assert_eq!(pipeline.commands.len(), 3);
+        assert_eq!(pipeline.commands[0].program, "cat");
+        assert_eq!(pipeline.commands[2].program, "sort");
+    }
+
+    #[test]
+    fn step_wraps_command_or_pipeline() {
+        let step_cmd = Step::Command(cmd("ls", &[]));
+        let step_pipe = Step::Pipeline(PipelinePlan {
+            commands: vec![cmd("a", &[]), cmd("b", &[])],
+        });
+        assert!(matches!(step_cmd, Step::Command(_)));
+        assert!(matches!(step_pipe, Step::Pipeline(_)));
+    }
+
+    #[test]
+    fn pipeline_plan_equality() {
+        let a = PipelinePlan {
+            commands: vec![cmd("a", &[]), cmd("b", &[])],
+        };
+        let b = PipelinePlan {
+            commands: vec![cmd("a", &[]), cmd("b", &[])],
+        };
+        assert_eq!(a, b);
+    }
 
     #[test]
     fn command_plan_construction_and_field_access() {
