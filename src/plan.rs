@@ -58,9 +58,99 @@ pub struct ShellPlan {
     pub steps: Vec<(Join, Step)>,
 }
 
+impl ShellPlan {
+    /// Immutable sequential composition — the runtime behavior behind
+    /// Spar's `shell + shell -> shell` operator (master prompt §15-16).
+    /// `other`'s first step is rewritten to `Join::OnSuccess` so failure
+    /// propagates across the `+` boundary exactly like a `;`-separated
+    /// statement would inside one `shell {}` block — see the design doc's
+    /// "Composition semantics" section for the rationale.
+    pub fn then(mut self, other: ShellPlan) -> ShellPlan {
+        let mut other_steps = other.steps.into_iter();
+        if let Some((_, first_step)) = other_steps.next() {
+            self.steps.push((Join::OnSuccess, first_step));
+        }
+        self.steps.extend(other_steps);
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn then_appends_steps_in_order() {
+        let a = ShellPlan {
+            steps: vec![(Join::Always, Step::Command(cmd("cargo", &["fmt"])))],
+        };
+        let b = ShellPlan {
+            steps: vec![(Join::Always, Step::Command(cmd("cargo", &["build"])))],
+        };
+        let combined = a.then(b);
+        assert_eq!(combined.steps.len(), 2);
+        assert_eq!(combined.steps[0].1, Step::Command(cmd("cargo", &["fmt"])));
+        assert_eq!(combined.steps[1].1, Step::Command(cmd("cargo", &["build"])));
+    }
+
+    #[test]
+    fn then_rewrites_only_the_first_step_of_the_second_plan_to_on_success() {
+        let a = ShellPlan {
+            steps: vec![(Join::Always, Step::Command(cmd("a", &[])))],
+        };
+        let b = ShellPlan {
+            steps: vec![
+                (Join::Always, Step::Command(cmd("b1", &[]))),
+                (Join::OnFailure, Step::Command(cmd("b2", &[]))),
+            ],
+        };
+        let combined = a.then(b);
+        assert_eq!(combined.steps[0].0, Join::Always, "first plan's own join untouched");
+        assert_eq!(
+            combined.steps[1].0,
+            Join::OnSuccess,
+            "second plan's first step becomes OnSuccess"
+        );
+        assert_eq!(
+            combined.steps[2].0,
+            Join::OnFailure,
+            "second plan's later joins untouched"
+        );
+    }
+
+    #[test]
+    fn then_with_empty_left_operand_just_takes_the_right_operand_with_rewritten_head() {
+        let a = ShellPlan { steps: vec![] };
+        let b = ShellPlan {
+            steps: vec![(Join::Always, Step::Command(cmd("only", &[])))],
+        };
+        let combined = a.then(b);
+        assert_eq!(combined.steps.len(), 1);
+        assert_eq!(combined.steps[0].0, Join::OnSuccess);
+    }
+
+    #[test]
+    fn then_with_empty_right_operand_is_a_noop() {
+        let a = ShellPlan {
+            steps: vec![(Join::Always, Step::Command(cmd("only", &[])))],
+        };
+        let b = ShellPlan { steps: vec![] };
+        let combined = a.clone().then(b);
+        assert_eq!(combined, a);
+    }
+
+    #[test]
+    fn then_does_not_mutate_operands_because_it_takes_them_by_value() {
+        let a = ShellPlan {
+            steps: vec![(Join::Always, Step::Command(cmd("a", &[])))],
+        };
+        let b = ShellPlan {
+            steps: vec![(Join::Always, Step::Command(cmd("b", &[])))],
+        };
+        let combined_from_clones = a.clone().then(b.clone());
+        let combined_direct = a.then(b);
+        assert_eq!(combined_from_clones, combined_direct);
+    }
 
     #[test]
     fn shell_plan_holds_ordered_joined_steps() {
