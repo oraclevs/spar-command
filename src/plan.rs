@@ -46,9 +46,47 @@ pub enum Step {
     Pipeline(PipelinePlan),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Join {
+    Always,
+    OnSuccess,
+    OnFailure,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShellPlan {
+    pub steps: Vec<(Join, Step)>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shell_plan_holds_ordered_joined_steps() {
+        let plan = ShellPlan {
+            steps: vec![
+                (Join::Always, Step::Command(cmd("cargo", &["fmt", "--check"]))),
+                (Join::OnSuccess, Step::Command(cmd("cargo", &["test"]))),
+            ],
+        };
+        assert_eq!(plan.steps.len(), 2);
+        assert_eq!(plan.steps[0].0, Join::Always);
+        assert_eq!(plan.steps[1].0, Join::OnSuccess);
+    }
+
+    #[test]
+    fn empty_shell_plan_is_constructible() {
+        let plan = ShellPlan { steps: vec![] };
+        assert!(plan.steps.is_empty());
+    }
+
+    #[test]
+    fn join_variants_are_distinct() {
+        assert_ne!(Join::Always, Join::OnSuccess);
+        assert_ne!(Join::OnSuccess, Join::OnFailure);
+        assert_ne!(Join::Always, Join::OnFailure);
+    }
 
     fn cmd(program: &str, args: &[&str]) -> CommandPlan {
         CommandPlan {
