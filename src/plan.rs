@@ -105,7 +105,11 @@ mod tests {
             ],
         };
         let combined = a.then(b);
-        assert_eq!(combined.steps[0].0, Join::Always, "first plan's own join untouched");
+        assert_eq!(
+            combined.steps[0].0,
+            Join::Always,
+            "first plan's own join untouched"
+        );
         assert_eq!(
             combined.steps[1].0,
             Join::OnSuccess,
@@ -156,7 +160,10 @@ mod tests {
     fn shell_plan_holds_ordered_joined_steps() {
         let plan = ShellPlan {
             steps: vec![
-                (Join::Always, Step::Command(cmd("cargo", &["fmt", "--check"]))),
+                (
+                    Join::Always,
+                    Step::Command(cmd("cargo", &["fmt", "--check"])),
+                ),
                 (Join::OnSuccess, Step::Command(cmd("cargo", &["test"]))),
             ],
         };
@@ -193,7 +200,11 @@ mod tests {
     #[test]
     fn pipeline_plan_holds_ordered_commands() {
         let pipeline = PipelinePlan {
-            commands: vec![cmd("cat", &["file.log"]), cmd("grep", &["ERROR"]), cmd("sort", &[])],
+            commands: vec![
+                cmd("cat", &["file.log"]),
+                cmd("grep", &["ERROR"]),
+                cmd("sort", &[]),
+            ],
         };
         assert_eq!(pipeline.commands.len(), 3);
         assert_eq!(pipeline.commands[0].program, "cat");
