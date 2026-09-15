@@ -24,9 +24,72 @@ pub enum WorkingDirectory {
     Path(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandPlan {
+    pub program: String,
+    pub args: Vec<String>,
+    pub env: Vec<EnvironmentOverride>,
+    pub cwd: Option<WorkingDirectory>,
+    pub stdin: Option<Redirection>,
+    pub stdout: Option<Redirection>,
+    pub stderr: Option<Redirection>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn command_plan_construction_and_field_access() {
+        let cmd = CommandPlan {
+            program: "cargo".into(),
+            args: vec!["build".into(), "--release".into()],
+            env: vec![EnvironmentOverride {
+                key: "RUST_LOG".into(),
+                value: "debug".into(),
+            }],
+            cwd: Some(WorkingDirectory::Path("/repo".into())),
+            stdin: None,
+            stdout: Some(Redirection::File {
+                path: "build.log".into(),
+                mode: RedirectMode::Truncate,
+            }),
+            stderr: None,
+        };
+        assert_eq!(cmd.program, "cargo");
+        assert_eq!(cmd.args, vec!["build", "--release"]);
+        assert_eq!(cmd.env.len(), 1);
+    }
+
+    #[test]
+    fn command_plan_equality_and_clone() {
+        let cmd = CommandPlan {
+            program: "echo".into(),
+            args: vec!["hi".into()],
+            env: vec![],
+            cwd: None,
+            stdin: None,
+            stdout: None,
+            stderr: None,
+        };
+        assert_eq!(cmd.clone(), cmd);
+    }
+
+    #[test]
+    fn command_plan_no_args_no_overrides() {
+        let cmd = CommandPlan {
+            program: "pwd".into(),
+            args: vec![],
+            env: vec![],
+            cwd: None,
+            stdin: None,
+            stdout: None,
+            stderr: None,
+        };
+        assert!(cmd.args.is_empty());
+        assert!(cmd.env.is_empty());
+        assert!(cmd.cwd.is_none());
+    }
 
     #[test]
     fn redirection_file_truncate_equality() {
