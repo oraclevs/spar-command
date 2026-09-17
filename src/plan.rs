@@ -14,6 +14,12 @@ pub enum Redirection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OrderedRedirection {
+    pub fd: u32,
+    pub target: Redirection,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnvironmentOverride {
     pub key: String,
     pub value: String,
@@ -33,6 +39,9 @@ pub struct CommandPlan {
     pub stdin: Option<Redirection>,
     pub stdout: Option<Redirection>,
     pub stderr: Option<Redirection>,
+    /// Generic fd operations, applied left-to-right after legacy fields.
+    pub redirections: Vec<OrderedRedirection>,
+    pub background: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -193,6 +202,8 @@ mod tests {
             stdin: None,
             stdout: None,
             stderr: None,
+            redirections: vec![],
+            background: false,
         }
     }
 
@@ -247,6 +258,8 @@ mod tests {
                 mode: RedirectMode::Truncate,
             }),
             stderr: None,
+            redirections: vec![],
+            background: false,
         };
         assert_eq!(cmd.program, "cargo");
         assert_eq!(cmd.args, vec!["build", "--release"]);
@@ -263,6 +276,8 @@ mod tests {
             stdin: None,
             stdout: None,
             stderr: None,
+            redirections: vec![],
+            background: false,
         };
         assert_eq!(cmd.clone(), cmd);
     }
@@ -277,6 +292,8 @@ mod tests {
             stdin: None,
             stdout: None,
             stderr: None,
+            redirections: vec![],
+            background: false,
         };
         assert!(cmd.args.is_empty());
         assert!(cmd.env.is_empty());
@@ -313,6 +330,26 @@ mod tests {
     fn redirection_duplicate_fd_equality() {
         assert_eq!(Redirection::DuplicateFd(1), Redirection::DuplicateFd(1));
         assert_ne!(Redirection::DuplicateFd(1), Redirection::DuplicateFd(2));
+    }
+
+    #[test]
+    fn command_keeps_generic_redirections_in_source_order() {
+        let mut command = cmd("tool", &[]);
+        command.redirections = vec![
+            OrderedRedirection {
+                fd: 2,
+                target: Redirection::DuplicateFd(1),
+            },
+            OrderedRedirection {
+                fd: 1,
+                target: Redirection::File {
+                    path: "out".into(),
+                    mode: RedirectMode::Truncate,
+                },
+            },
+        ];
+        assert_eq!(command.redirections[0].fd, 2);
+        assert_eq!(command.redirections[1].fd, 1);
     }
 
     #[test]
