@@ -61,14 +61,13 @@ pub struct ShellPlan {
 impl ShellPlan {
     /// Immutable sequential composition — the runtime behavior behind
     /// Spar's `shell + shell -> shell` operator (master prompt §15-16).
-    /// `other`'s first step is rewritten to `Join::OnSuccess` so failure
-    /// propagates across the `+` boundary exactly like a `;`-separated
-    /// statement would inside one `shell {}` block — see the design doc's
-    /// "Composition semantics" section for the rationale.
+    /// `other`'s first step is rewritten to `Join::Always`, matching ordinary
+    /// `;` sequencing. Conditional execution remains explicit through `&&`
+    /// and `||` joins inside either operand.
     pub fn then(mut self, other: ShellPlan) -> ShellPlan {
         let mut other_steps = other.steps.into_iter();
         if let Some((_, first_step)) = other_steps.next() {
-            self.steps.push((Join::OnSuccess, first_step));
+            self.steps.push((Join::Always, first_step));
         }
         self.steps.extend(other_steps);
         self
@@ -94,7 +93,7 @@ mod tests {
     }
 
     #[test]
-    fn then_rewrites_only_the_first_step_of_the_second_plan_to_on_success() {
+    fn then_runs_the_first_step_of_the_second_plan_unconditionally() {
         let a = ShellPlan {
             steps: vec![(Join::Always, Step::Command(cmd("a", &[])))],
         };
@@ -112,8 +111,8 @@ mod tests {
         );
         assert_eq!(
             combined.steps[1].0,
-            Join::OnSuccess,
-            "second plan's first step becomes OnSuccess"
+            Join::Always,
+            "sequential composition runs after either prior outcome"
         );
         assert_eq!(
             combined.steps[2].0,
@@ -123,14 +122,14 @@ mod tests {
     }
 
     #[test]
-    fn then_with_empty_left_operand_just_takes_the_right_operand_with_rewritten_head() {
+    fn then_with_empty_left_operand_preserves_an_always_head() {
         let a = ShellPlan { steps: vec![] };
         let b = ShellPlan {
             steps: vec![(Join::Always, Step::Command(cmd("only", &[])))],
         };
         let combined = a.then(b);
         assert_eq!(combined.steps.len(), 1);
-        assert_eq!(combined.steps[0].0, Join::OnSuccess);
+        assert_eq!(combined.steps[0].0, Join::Always);
     }
 
     #[test]
