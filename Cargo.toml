@@ -2,6 +2,8 @@
 name = "spar-command"
 version = "0.1.0"
 edition = "2021"
-publish = false
+license = "MIT"
+description = "Ordered shell command metadata for the Spar toolchain"
+repository = "https://github.com/oraclevs/spar-command"
 
 [dependencies]
